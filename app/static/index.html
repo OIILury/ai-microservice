@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Démo IA Microservice — Jetson Orin NX</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #16a34a;
+            --error: #dc2626;
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #111827;
+            --text-sec: #6b7280;
+            --border: #e5e7eb;
+            --radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-title h1 { margin: 0; font-size: 1.5rem; }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--text-sec);
+        }
+        .status-dot.online { background-color: var(--success); }
+        .status-dot.offline { background-color: var(--error); }
+        .model-name { font-size: 0.9rem; color: var(--text-sec); }
+
+        /* Main Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+        /* Cards */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-title { margin: 0 0 8px 0; font-size: 1.25rem; }
+        .card-desc { color: var(--text-sec); font-size: 0.9rem; margin-bottom: 20px; }
+
+        /* Forms */
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+        }
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 12px;
+        }
+        button:hover { background-color: var(--primary-hover); }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Correction result */
+        .result-area {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            min-height: 100px;
+            white-space: pre-wrap;
+        }
+        .result-meta { font-size: 0.8rem; color: var(--text-sec); margin-top: 8px; }
+        .error-text { color: var(--error); font-weight: 500; }
+
+        /* Chat interface */
+        .chat-history {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #f9fafb;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .chat-bubble {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+        }
+        .bubble-user {
+            align-self: flex-end;
+            background-color: var(--primary);
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+        .bubble-ia {
+            align-self: flex-start;
+            background-color: #f3f4f6;
+            color: var(--text-main);
+            border-bottom-left-radius: 2px;
+        }
+        .ia-url { display: block; font-weight: bold; font-size: 1.1rem; margin-bottom: 4px; }
+        .ia-meta { font-size: 0.8rem; color: var(--text-sec); }
+        .chat-input-row { display: flex; gap: 8px; margin-top: 12px; }
+        .chat-input-row input { margin-top: 0; }
+        .chat-input-row button { margin-top: 0; flex-shrink: 0; }
+        .clear-btn {
+            background-color: transparent;
+            color: var(--text-sec);
+            font-size: 0.8rem;
+            text-decoration: underline;
+            padding: 5px;
+            margin-top: 5px;
+            align-self: flex-end;
+        }
+        .clear-btn:hover { color: var(--text-main); background: none; }
+
+        /* Doc Accordion */
+        .doc-section { margin-top: 24px; }
+        .doc-header {
+            background-color: var(--card-bg);
+            padding: 15px 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .doc-header h2 { margin: 0; font-size: 1.1rem; }
+        .doc-content {
+            background-color: var(--card-bg);
+            border-top: 1px solid var(--border);
+            border-bottom-left-radius: var(--radius);
+            border-bottom-right-radius: var(--radius);
+            padding: 24px;
+            display: none;
+            box-shadow: var(--shadow);
+        }
+        .doc-content h3 { margin: 20px 0 10px 0; font-size: 1rem; }
+        .doc-content h3:first-child { margin-top: 0; }
+        .doc-content p, .doc-content ul { margin: 0 0 15px 0; font-size: 0.95rem; color: #374151; }
+        .doc-content ul { padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Section 1: Header -->
+        <header>
+            <div class="header-title">
+                <h1>Démo IA Microservice — Jetson Orin NX</h1>
+                <div class="model-name" id="modelName">Chargement du modèle...</div>
+            </div>
+            <div class="status-badge">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Vérification...</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Section 2: Outil de Correction -->
+            <section class="card">
+                <h2 class="card-title">Correcteur de Texte</h2>
+                <p class="card-desc">Soumettez un texte contenant des fautes. Le modèle LLM local le corrigera sans interaction conversationnelle.</p>
+                <textarea id="correctionInput" placeholder="Entrez votre texte à corriger ici..." style="min-height: 120px;" aria-label="Texte à corriger"></textarea>
+                <button id="btnCorrection" onclick="corrigerTexte()" aria-label="Lancer la correction">Corriger le texte</button>
+                <div class="result-area" id="correctionResult">Les résultats apparaîtront ici...</div>
+                <div class="result-meta" id="correctionMeta"></div>
+            </section>
+
+            <!-- Section 3: Assistant de Navigation -->
+            <section class="card">
+                <h2 class="card-title">Assistant de Navigation</h2>
+                <p class="card-desc">Posez une question en langage naturel. Le modèle identifiera la page la plus pertinente de notre site.</p>
+                <div class="chat-history" id="chatHistory" aria-live="polite">
+                    <!-- Messages will appear here -->
+                </div>
+                <div class="chat-input-row">
+                    <input type="text" id="chatInput" placeholder="Ex: Quels sont vos tarifs ?" aria-label="Question de navigation">
+                    <button id="btnNavigation" onclick="envoyerRequete()" aria-label="Envoyer la question">Envoyer</button>
+                </div>
+                <button class="clear-btn" onclick="effacerHistorique()" aria-label="Effacer l'historique du chat">Effacer l'historique</button>
+            </section>
+        </div>
+
+        <!-- Section 4: Documentation -->
+        <section class="doc-section">
+            <div class="doc-header" onclick="toggleDoc()">
+                <h2>ℹ️ Comment fonctionne cette application ?</h2>
+                <span id="docArrow">▼</span>
+            </div>
+            <div class="doc-content" id="docContent">
+                <h3>Architecture globale</h3>
+                <p>Le frontend communique avec un microservice Python FastAPI tournant sur une carte embarquée Jetson Orin NX. Ce microservice transmet les requêtes à Ollama, un moteur d'inférence LLM qui exécute le modèle de langage localement. Aucune donnée ne quitte le réseau local.</p>
+                
+                <h3>Endpoint de correction (/api/corriger)</h3>
+                <p>Le modèle reçoit un system prompt strict lui interdisant toute réponse conversationnelle. Il agit comme un filtre de transformation pure : entrée = texte brut, sortie = texte corrigé uniquement.</p>
+                
+                <h3>Endpoint de navigation (/api/trouver-page)</h3>
+                <p>Le modèle reçoit une cartographie des pages disponibles et effectue une classification Zero-Shot — il détermine la page la plus pertinente sans avoir été entraîné spécifiquement pour ce site.</p>
+                
+                <h3>Confidentialité</h3>
+                <p>L'architecture est "privacy-first" — le modèle LLM tourne intégralement en local sur le matériel Jetson, sans appel à des APIs cloud (pas d'OpenAI, pas d'Anthropic, pas de Google). Les données ne quittent jamais le réseau local.</p>
+                
+                <h3>Stack technique</h3>
+                <ul>
+                    <li>Python 3.10+ / FastAPI / Pydantic / httpx</li>
+                    <li>Ollama / Llama 3 8B</li>
+                    <li>Jetson Orin NX / JetPack 6</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        'use strict';
+
+        const API_BASE_URL = window.location.origin;
+
+        // Elements
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const modelName = document.getElementById('modelName');
+        
+        const correctionInput = document.getElementById('correctionInput');
+        const btnCorrection = document.getElementById('btnCorrection');
+        const correctionResult = document.getElementById('correctionResult');
+        const correctionMeta = document.getElementById('correctionMeta');
+
+        const chatHistory = document.getElementById('chatHistory');
+        const chatInput = document.getElementById('chatInput');
+        const btnNavigation = document.getElementById('btnNavigation');
+        
+        const docContent = document.getElementById('docContent');
+        const docArrow = document.getElementById('docArrow');
+
+        // Health Check
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    statusDot.className = 'status-dot online';
+                    statusText.textContent = 'Service en ligne';
+                    modelName.textContent = `Modèle : ${data.model}`;
+                } else {
+                    throw new Error('Health check failed');
+                }
+            } catch (error) {
+                statusDot.className = 'status-dot offline';
+                statusText.textContent = 'Service hors ligne';
+                modelName.textContent = 'Modèle : Indisponible';
+            }
+        }
+
+        // Correction Function
+        async function corrigerTexte() {
+            const texte = correctionInput.value.trim();
+            if (!texte) {
+                correctionResult.innerHTML = '<span class="error-text">Erreur : Veuillez entrer un texte à corriger.</span>';
+                return;
+            }
+
+            btnCorrection.disabled = true;
+            btnCorrection.textContent = 'Traitement en cours...';
+            correctionResult.textContent = 'Correction en cours...';
+            correctionMeta.textContent = '';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/corriger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ texte })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Erreur lors de la correction');
+                }
+
+                const data = await response.json();
+                correctionResult.textContent = data.texte_corrige;
+                correctionMeta.textContent = `Modèle utilisé : ${data.modele_utilise}`;
+            } catch (error) {
+                correctionResult.innerHTML = `<span class="error-text">Erreur : ${error.message}</span>`;
+            } finally {
+                btnCorrection.disabled = false;
+                btnCorrection.textContent = 'Corriger le texte';
+            }
+        }
+
+        // Navigation Functions
+        async function envoyerRequete() {
+            const requete = chatInput.value.trim();
+            if (!requete) return;
+
+            ajouterBulle(requete, 'user');
+            chatInput.value = '';
+            
+            btnNavigation.disabled = true;
+            btnNavigation.textContent = '...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/trouver-page`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requete })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Erreur API');
+                }
+
+                const data = await response.json();
+                const textIA = `
+                    <span class="ia-url">${data.page}</span>
+                    <span class="ia-meta">${data.page_trouvee ? '→ Redirection vers ' + data.page : '→ Aucune page correspondante trouvée'}</span>
+                `;
+                ajouterBulle(textIA, 'ia');
+            } catch (error) {
+                ajouterBulle(`<span class="error-text">Erreur : ${error.message}</span>`, 'ia');
+            } finally {
+                btnNavigation.disabled = false;
+                btnNavigation.textContent = 'Envoyer';
+            }
+        }
+
+        function ajouterBulle(content, type) {
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble bubble-${type}`;
+            bubble.innerHTML = content;
+            chatHistory.appendChild(bubble);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function effacerHistorique() {
+            chatHistory.innerHTML = '';
+        }
+
+        // Accordion
+        function toggleDoc() {
+            const isVisible = docContent.style.display === 'block';
+            docContent.style.display = isVisible ? 'none' : 'block';
+            docArrow.textContent = isVisible ? '▼' : '▲';
+        }
+
+        // Event Listeners
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') envoyerRequete();
+        });
+
+        // Init
+        checkHealth();
+        setInterval(checkHealth, 30000);
+    </script>
+</body>
+</html>
