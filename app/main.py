@@ -8,6 +8,10 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.services.ollama_client import ollama_client
 from app.routers import correction, navigation
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+import ipaddress
 
 # Configuration du logging
 logging.basicConfig(
@@ -33,31 +37,39 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+class LocalNetworkMiddleware(BaseHTTPMiddleware):
+    ALLOWED_NETWORKS = [
+        ipaddress.ip_network("127.0.0.0/8"),
+        ipaddress.ip_network("192.168.0.0/16"),
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("172.16.0.0/12"),
+    ]
+
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else None
+        if client_ip:
+            try:
+                ip = ipaddress.ip_address(client_ip)
+                if not any(ip in net for net in self.ALLOWED_NETWORKS):
+                    return Response("Accès refusé : réseau non autorisé.", status_code=403)
+            except ValueError:
+                return Response("Accès refusé : IP invalide.", status_code=403)
+        return await call_next(request)
+
+app.add_middleware(LocalNetworkMiddleware)
+
 # Restriction aux hôtes du réseau local uniquement (privacy-first)
 app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=[
         "localhost",
         "127.0.0.1",
+        "testserver",      # requis pour les tests httpx
         "*.local",
-        "192.168.*",
-        "10.*",
-        "172.16.*",
-        "172.17.*",
-        "172.18.*",
-        "172.19.*",
-        "172.20.*",
-        "172.21.*",
-        "172.22.*",
-        "172.23.*",
-        "172.24.*",
-        "172.25.*",
-        "172.26.*",
-        "172.27.*",
-        "172.28.*",
-        "172.29.*",
-        "172.30.*",
-        "172.31.*",
+        "192.168.82.169",
+        "192.168.82.169:8000",
+        "192.168.82.1:7",
+        "192.168.82.117:8000",
     ]
 )
 
