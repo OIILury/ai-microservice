@@ -1,0 +1,17 @@
+# Environnement virtuel
+venv/
+.venv/
+
+# Variables d'environnement (contient potentiellement des secrets)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# Coverage
+.coverage
+htmlcov/
