@@ -20,14 +20,16 @@ class NavigationRequest(BaseModel):
     )
 
 class NavigationResponse(BaseModel):
-    page: str
+    reponse: str           # le texte de réponse généré par le LLM (sans la ligne LIEN)
+    page: str | None       # l'URL extraite si présente, sinon None
     modele_utilise: str
-    page_trouvee: bool
+    page_trouvee: bool      # True si une URL a été extraite et validée
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "page": "/tarifs",
+                "reponse": "Nos horaires sont de 9h à 18h en semaine.",
+                "page": "/contact",
                 "modele_utilise": "llama3:8b",
                 "page_trouvee": True
             }

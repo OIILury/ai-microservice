@@ -1,5 +1,6 @@
 # app/main.py
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -13,6 +14,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 import ipaddress
 
+import time
+from app.services.embedding_store import embedding_store
+
 # Configuration du logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
@@ -22,9 +26,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Démarrage : initialisation du client Ollama
+    # Démarrage : initialisation du client Ollama et de l'index RAG
     logger.info(f"Démarrage du microservice. Modèle configuré : {settings.OLLAMA_MODEL}")
     await ollama_client.start()
+    
+    start_time = time.time()
+    await asyncio.to_thread(embedding_store.build_index)
+    duration = time.time() - start_time
+    logger.info(f"Index RAG initialisé en {duration:.2f}s ({len(embedding_store.chunks)} chunks).")
+    
     yield
     # Arrêt : fermeture du client Ollama
     logger.info("Arrêt du microservice.")
@@ -68,7 +78,7 @@ app.add_middleware(
         "*.local",
         "192.168.82.169",
         "192.168.82.169:8000",
-        "192.168.82.1:7",
+        "192.168.82.117",
         "192.168.82.117:8000",
     ]
 )

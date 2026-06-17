@@ -6,8 +6,15 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.services.ollama_client import ollama_client
+from app.services.embedding_store import embedding_store
 
 pytest_plugins = ('pytest_asyncio',)
+
+@pytest.fixture(autouse=True)
+def mock_embedding_build_index():
+    """Patch build_index to do nothing during tests."""
+    with patch.object(embedding_store, "build_index") as mock:
+        yield mock
 
 @pytest.fixture(scope="function")
 def mock_ollama_generate():

@@ -375,11 +375,13 @@
                 }
 
                 const data = await response.json();
-                const textIA = `
-                    <span class="ia-url">${data.page}</span>
-                    <span class="ia-meta">${data.page_trouvee ? '→ Redirection vers ' + data.page : '→ Aucune page correspondante trouvée'}</span>
-                `;
-                ajouterBulle(textIA, 'ia');
+                
+                let contentHTML = `<p>${data.reponse}</p>`;
+                if (data.page_trouvee && data.page) {
+                    contentHTML += `<a href="${data.page}" target="_blank" style="display: inline-block; background: white; color: var(--primary); padding: 5px 10px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-top: 10px; border: 1px solid var(--primary);">→ Voir la page ${data.page}</a>`;
+                }
+                
+                ajouterBulle(contentHTML, 'ia');
             } catch (error) {
                 ajouterBulle(`<span class="error-text">Erreur : ${error.message}</span>`, 'ia');
             } finally {
