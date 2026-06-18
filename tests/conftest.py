@@ -24,6 +24,14 @@ def mock_ollama_generate():
     with patch.object(ollama_client, "generate", new_callable=AsyncMock) as mock:
         yield mock
 
+@pytest.fixture(scope="function")
+def mock_ollama_sauvegarder():
+    """
+    Fixture to patch the OllamaClient.appeler_ollama_et_sauvegarder method with an AsyncMock.
+    """
+    with patch.object(ollama_client, "appeler_ollama_et_sauvegarder", new_callable=AsyncMock) as mock:
+        yield mock
+
 @pytest_asyncio.fixture(scope="function")
 async def client():
     """

@@ -16,6 +16,7 @@ import ipaddress
 
 import time
 from app.services.embedding_store import embedding_store
+from app.services.db import init_db
 
 # Configuration du logging
 logging.basicConfig(
@@ -26,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Démarrage : initialisation du client Ollama et de l'index RAG
+    # Démarrage : initialisation de la base de données, du client Ollama et de l'index RAG
+    init_db()
     logger.info(f"Démarrage du microservice. Modèle configuré : {settings.OLLAMA_MODEL}")
     await ollama_client.start()
     

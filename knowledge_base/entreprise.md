@@ -22,3 +22,7 @@ R: Absolument, la confidentialité des données est au cœur de notre approche "
 
 ## Informations sur l'équipe
 L'équipe d'InnovaTech est composée de 15 experts passionnés, incluant des développeurs full-stack, des data scientists et des chefs de projet certifiés. Nous croyons en la formation continue pour rester à la pointe de l'innovation technologique.
+
+## Lien du site internet
+Le site du portail est à cette adresse : 'https://portal.fluidexpert.com/contact'
+Le site de l'entreprise est à cette adresse : 'https://fluidexpert.fr/'
