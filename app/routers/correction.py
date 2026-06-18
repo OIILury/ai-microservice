@@ -1,9 +1,7 @@
-# app/routers/correction.py
 from fastapi import APIRouter, HTTPException, status
 from app.models.correction import CorrectionRequest, CorrectionResponse
-from app.models.reformulation import ReformulationRequest, ReformulationResponse
 from app.services import prompt_builder
-from app.services.ollama_client import ollama_client
+from app.services.ollama_metrics_service import appeler_ollama_et_sauvegarder
 from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["Text Processing"])
@@ -11,49 +9,41 @@ router = APIRouter(prefix="/api", tags=["Text Processing"])
 @router.post("/corriger", response_model=CorrectionResponse)
 async def corriger_texte(request: CorrectionRequest):
     """
-    Endpoint pour corriger l'orthographe et la grammaire d'un texte.
+    Pipeline interne : corrige le texte, puis le reformule automatiquement.
+    Seul le résultat final reformulé est retourné au client.
+    Les deux étapes sont mesurées et enregistrées séparément dans les métriques.
     """
-    messages = prompt_builder.build_correction_prompt(request.texte)
-    
-    resultat = await ollama_client.appeler_ollama_et_sauvegarder(
-        modele=settings.OLLAMA_MODEL,
-        messages=messages,
-        texte_entree=request.texte,
-        endpoint_nom="correction"
-    )
-    
-    if not resultat.strip():
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Le modèle a retourné une réponse vide."
-        )
-    
-    return CorrectionResponse(
-        texte_corrige=resultat,
-        modele_utilise=settings.OLLAMA_MODEL
+    # Étape 1 : correction (invisible pour le client final)
+    messages_correction = prompt_builder.build_correction_prompt(request.texte)
+    texte_corrige = await appeler_ollama_et_sauvegarder(
+        messages=messages_correction,
+        temperature=settings.CORRECTION_TEMPERATURE,
+        type_tache="correction",
+        texte_entree=request.texte
     )
 
-@router.post("/reformuler", response_model=ReformulationResponse)
-async def reformuler_texte(request: ReformulationRequest):
-    """
-    Endpoint pour reformuler un texte de manière professionnelle.
-    """
-    messages = prompt_builder.build_reformulation_prompt(request.texte)
-    
-    resultat = await ollama_client.appeler_ollama_et_sauvegarder(
-        modele=settings.OLLAMA_MODEL,
-        messages=messages,
-        texte_entree=request.texte,
-        endpoint_nom="reformulation"
-    )
-    
-    if not resultat.strip():
+    if not texte_corrige.strip():
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Le modèle a retourné une réponse vide."
+            status_code=status.HTTP_502_BAD_GATEWAY, 
+            detail="Le modèle a retourné une réponse vide à l'étape de correction."
         )
-    
-    return ReformulationResponse(
-        texte_reformule=resultat,
+
+    # Étape 2 : reformulation du texte déjà corrigé
+    messages_reformulation = prompt_builder.build_reformulation_prompt(texte_corrige)
+    texte_final = await appeler_ollama_et_sauvegarder(
+        messages=messages_reformulation,
+        temperature=settings.REFORMULATION_TEMPERATURE,
+        type_tache="reformulation",
+        texte_entree=texte_corrige
+    )
+
+    if not texte_final.strip():
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, 
+            detail="Le modèle a retourné une réponse vide à l'étape de reformulation."
+        )
+
+    return CorrectionResponse(
+        texte_corrige=texte_final,
         modele_utilise=settings.OLLAMA_MODEL
     )

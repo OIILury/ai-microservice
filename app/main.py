@@ -1,4 +1,3 @@
-# app/main.py
 import logging
 import asyncio
 from contextlib import asynccontextmanager
@@ -8,15 +7,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.config import settings
 from app.services.ollama_client import ollama_client
-from app.routers import correction, navigation
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 import ipaddress
-
 import time
+
 from app.services.embedding_store import embedding_store
-from app.services.db import init_db
+from app.services.metrics_store import metrics_store
+from app.routers import correction, navigation, metrics
 
 # Configuration du logging
 logging.basicConfig(
@@ -28,7 +27,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Démarrage : initialisation de la base de données, du client Ollama et de l'index RAG
-    init_db()
+    await asyncio.to_thread(metrics_store.init_db)
+    logger.info("Base de métriques SQLite initialisée.")
+    
     logger.info(f"Démarrage du microservice. Modèle configuré : {settings.OLLAMA_MODEL}")
     await ollama_client.start()
     
@@ -88,6 +89,7 @@ app.add_middleware(
 # Enregistrement des routers
 app.include_router(correction.router)
 app.include_router(navigation.router)
+app.include_router(metrics.router)
 
 # Service des fichiers statiques
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

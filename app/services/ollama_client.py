@@ -77,6 +77,96 @@ class OllamaClient:
                 detail=f"Erreur interne lors du traitement par le modèle: {str(e)}"
             )
 
+    async def generate_with_metrics(self, messages: list[dict], temperature: float) -> dict:
+        """
+        Appelle Ollama en streaming pour mesurer le TTFT et extraire les métriques.
+        """
+        if self.client is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ollama client is not initialized."
+            )
+
+        payload = {
+            "model": settings.OLLAMA_MODEL,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": temperature
+            }
+        }
+
+        texte_complet = ""
+        ttft_ms = 0.0
+        start_time = time.time()
+        first_token_received = False
+
+        # Métriques finales
+        total_duration = 0
+        eval_count = 0
+        eval_duration = 0
+        prompt_eval_count = 0
+
+        try:
+            async with self.client.stream("POST", "/api/chat", json=payload) as response:
+                response.raise_for_status()
+                
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Ligne JSONL mal formée ignorée dans le flux Ollama.")
+                        continue
+
+                    if "message" in chunk:
+                        content = chunk["message"].get("content", "")
+                        if content:
+                            if not first_token_received:
+                                ttft_ms = (time.time() - start_time) * 1000
+                                first_token_received = True
+                            texte_complet += content
+                    
+                    if chunk.get("done"):
+                        total_duration = chunk.get("total_duration", 0)
+                        eval_count = chunk.get("eval_count", 0)
+                        eval_duration = chunk.get("eval_duration", 0)
+                        prompt_eval_count = chunk.get("prompt_eval_count", 0)
+
+            return {
+                "texte": texte_complet.strip(),
+                "ttft_ms": ttft_ms,
+                "total_duration_ns": total_duration,
+                "eval_count": eval_count,
+                "eval_duration_ns": eval_duration,
+                "prompt_eval_count": prompt_eval_count,
+            }
+
+        except httpx.TimeoutException:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Le modèle LLM n'a pas répondu dans le délai imparti."
+            )
+        except httpx.ConnectError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Impossible de joindre le service Ollama. Vérifiez qu'il est en cours d'exécution."
+            )
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Erreur reçue d'Ollama (Statut {e.response.status_code})."
+            )
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erreur lors du streaming Ollama: {str(e)}"
+            )
+
     async def appeler_ollama_et_sauvegarder(self, modele: str, messages: list[dict], texte_entree: str, endpoint_nom: str) -> str:
         """
         Appelle Ollama, extrait les métriques et les sauvegarde dans SQLite.

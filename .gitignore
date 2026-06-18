@@ -15,3 +15,6 @@ __pycache__/
 # Coverage
 .coverage
 htmlcov/
+
+# Base de données locale
+metrics.db
