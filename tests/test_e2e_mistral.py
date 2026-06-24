@@ -14,11 +14,15 @@ Usage: python3 test_e2e_mistral.py
 import sys
 import os
 import time
-import requests
+import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from embedding_store import EmbeddingStore
-from rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
+from app.services.embedding_store import EmbeddingStore
+from app.services.rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
+
+import app.services.rag_engine as rag_engine_module
+print(f"[DEBUG] rag_engine chargé depuis : {rag_engine_module.__file__}")
+print(f"[DEBUG] test_e2e_mistral exécuté depuis : {__file__}")
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
@@ -65,7 +69,7 @@ def appeler_mistral(messages: list[dict]) -> str:
     du prompt peu fiable. En production, ce déterminisme est aussi souhaitable
     pour un assistant d'entreprise (réponses cohérentes à une même question).
     """
-    response = requests.post(
+    response = httpx.post(
         OLLAMA_URL,
         json={
             "model": OLLAMA_MODEL,
