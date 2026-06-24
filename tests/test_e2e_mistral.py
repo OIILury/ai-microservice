@@ -11,17 +11,20 @@ arbo réelle, ex. 'from app.services.embedding_store import EmbeddingStore').
 
 Usage: python3 test_e2e_mistral.py
 """
+import sys
+import os
 import time
-import httpx
+import requests
 
-from app.services.embedding_store import EmbeddingStore
-from app.services.rag_engine import build_rag_prompt
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from embedding_store import EmbeddingStore
+from rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
 KB_DIR = "knowledge_base"  # doit contenir RAGComGroupeFluidexpert.md
 
-REPONSE_REJET = "Je n'ai pas trouvé cette information dans ma base de connaissances."
+REPONSE_REJET = MESSAGE_REFUS_FINAL  # le test vérifie le message final, après post-traitement
 
 # Mêmes questions que calibrate_v3.py, pour rester comparable aux distances déjà mesurées.
 pertinentes = [
@@ -53,7 +56,7 @@ hors_sujet_faciles = [
 
 def appeler_mistral(messages: list[dict]) -> str:
     """Appelle Ollama en mode non-streaming pour simplifier ce script de test."""
-    response = httpx.post(
+    response = requests.post(
         OLLAMA_URL,
         json={"model": OLLAMA_MODEL, "messages": messages, "stream": False},
         timeout=60,
@@ -69,13 +72,15 @@ def tester_question(question: str, store: EmbeddingStore, attendu_rejet: bool):
     messages = build_rag_prompt(question, chunks)
     t0 = time.time()
     try:
-        reponse = appeler_mistral(messages)
+        reponse_brute = appeler_mistral(messages)
     except Exception as e:
         print(f"  [ERREUR OLLAMA] {e}")
         return None
     duree = time.time() - t0
 
-    a_rejete = REPONSE_REJET in reponse
+    reponse_finale = post_traiter_reponse(reponse_brute)
+    a_rejete = reponse_finale == REPONSE_REJET
+
     if attendu_rejet:
         ok = a_rejete
         statut = "OK (rejeté)" if ok else "ECHEC (a répondu alors qu'il ne devait pas)"
@@ -85,7 +90,9 @@ def tester_question(question: str, store: EmbeddingStore, attendu_rejet: bool):
 
     print(f"  [{statut}] ({duree:.1f}s, {distances_info})")
     print(f"    Q: {question}")
-    print(f"    R: {reponse[:200]}")
+    print(f"    R (brute Mistral) : {reponse_brute}")
+    if reponse_finale != reponse_brute:
+        print(f"    R (après post-traitement) : {reponse_finale}")
     print()
     return ok
 
@@ -104,6 +111,13 @@ if __name__ == "__main__":
     store = EmbeddingStore(KB_DIR, max_distance=30.0)
     store.build_index()
     print(f"Index chargé : {len(store.chunks)} chunks.\n")
+
+    print("Warm-up Ollama (chargement du modèle en mémoire)...")
+    try:
+        appeler_mistral([{"role": "user", "content": "Bonjour"}])
+        print("Modèle chargé.\n")
+    except Exception as e:
+        print(f"  [ATTENTION] Warm-up échoué : {e}\n")
 
     run("PERTINENTES (Mistral doit répondre)", pertinentes, store, attendu_rejet=False)
     run("HORS-SUJET DIFFICILES (Mistral doit rejeter malgré un contexte trompeur)",
