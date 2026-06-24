@@ -11,17 +11,14 @@ arbo réelle, ex. 'from app.services.embedding_store import EmbeddingStore').
 
 Usage: python3 test_e2e_mistral.py
 """
-import os
 import sys
+import os
 import time
-import httpx
-
-from app.services.embedding_store import EmbeddingStore
-from app.services.rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
-
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+from embedding_store import EmbeddingStore
+from rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
@@ -59,7 +56,7 @@ hors_sujet_faciles = [
 
 def appeler_mistral(messages: list[dict]) -> str:
     """Appelle Ollama en mode non-streaming pour simplifier ce script de test."""
-    response = httpx.post(
+    response = requests.post(
         OLLAMA_URL,
         json={"model": OLLAMA_MODEL, "messages": messages, "stream": False},
         timeout=60,
@@ -73,15 +70,22 @@ def tester_question(question: str, store: EmbeddingStore, attendu_rejet: bool):
     distances_info = f"{len(chunks)} chunk(s) retenu(s) (seuil={store.max_distance})"
 
     messages = build_rag_prompt(question, chunks)
-    t0 = time.time()
-    try:
-        reponse_brute = appeler_mistral(messages)
-    except Exception as e:
-        print(f"  [ERREUR OLLAMA] {e}")
-        return None
-    duree = time.time() - t0
 
-    reponse_finale = post_traiter_reponse(reponse_brute)
+    if messages is None:
+        # Contexte vide : court-circuit, pas d'appel LLM (cf. docstring de build_rag_prompt).
+        reponse_brute = "(contexte vide, LLM non appelé)"
+        reponse_finale = MESSAGE_REFUS_FINAL
+        duree = 0.0
+    else:
+        t0 = time.time()
+        try:
+            reponse_brute = appeler_mistral(messages)
+        except Exception as e:
+            print(f"  [ERREUR OLLAMA] {e}")
+            return None
+        duree = time.time() - t0
+        reponse_finale = post_traiter_reponse(reponse_brute)
+
     a_rejete = reponse_finale == REPONSE_REJET
 
     if attendu_rejet:
