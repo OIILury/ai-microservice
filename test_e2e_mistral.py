@@ -14,15 +14,11 @@ Usage: python3 test_e2e_mistral.py
 import sys
 import os
 import time
-import httpx
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from app.services.embedding_store import EmbeddingStore
-from app.services.rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
-
-import app.services.rag_engine as rag_engine_module
-print(f"[DEBUG] rag_engine chargé depuis : {rag_engine_module.__file__}")
-print(f"[DEBUG] test_e2e_mistral exécuté depuis : {__file__}")
+from embedding_store import EmbeddingStore
+from rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
@@ -59,10 +55,24 @@ hors_sujet_faciles = [
 
 
 def appeler_mistral(messages: list[dict]) -> str:
-    """Appelle Ollama en mode non-streaming pour simplifier ce script de test."""
-    response = httpx.post(
+    """
+    Appelle Ollama en mode non-streaming pour simplifier ce script de test.
+
+    temperature=0 : rend les réponses déterministes (sampling glouton). Sans ça,
+    deux runs avec le même code et le même corpus peuvent donner des résultats
+    différents sur les cas limites (cf. "anticollision" qui a basculé OK/ECHEC
+    entre deux runs identiques), ce qui rend toute comparaison entre versions
+    du prompt peu fiable. En production, ce déterminisme est aussi souhaitable
+    pour un assistant d'entreprise (réponses cohérentes à une même question).
+    """
+    response = requests.post(
         OLLAMA_URL,
-        json={"model": OLLAMA_MODEL, "messages": messages, "stream": False},
+        json={
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0},
+        },
         timeout=60,
     )
     response.raise_for_status()
