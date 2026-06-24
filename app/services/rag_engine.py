@@ -34,17 +34,6 @@ def build_rag_prompt(requete: str, contexte_chunks: list[str]) -> list[dict] | N
 
     return [
         {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": (
-                "Contexte :\nL'entreprise est certifiée ISO 9001, norme de management de la qualité.\n\n"
-                "Question : Quelle est la météo prévue à Paris demain ?"
-            ),
-        },
-        {
-            "role": "assistant",
-            "content": "Je n'ai pas trouvé cette information dans ma base de connaissances.",
-        },
         {"role": "user", "content": f"Contexte :\n{contexte_concatene}\n\nQuestion : {requete}"},
     ]
 
