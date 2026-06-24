@@ -11,14 +11,11 @@ arbo réelle, ex. 'from app.services.embedding_store import EmbeddingStore').
 
 Usage: python3 test_e2e_mistral.py
 """
-import sys
-import os
 import time
-import requests
+import httpx
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from embedding_store import EmbeddingStore
-from rag_engine import build_rag_prompt
+from app.services.embedding_store import EmbeddingStore
+from app.services.rag_engine import build_rag_prompt
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
@@ -56,7 +53,7 @@ hors_sujet_faciles = [
 
 def appeler_mistral(messages: list[dict]) -> str:
     """Appelle Ollama en mode non-streaming pour simplifier ce script de test."""
-    response = requests.post(
+    response = httpx.post(
         OLLAMA_URL,
         json={"model": OLLAMA_MODEL, "messages": messages, "stream": False},
         timeout=60,
