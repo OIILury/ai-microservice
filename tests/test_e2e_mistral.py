@@ -26,11 +26,10 @@ print(f"[DEBUG] test_e2e_mistral exécuté depuis : {__file__}")
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 OLLAMA_MODEL = "mistral"
-KB_DIR = "knowledge_base"  # doit contenir RAGComGroupeFluidexpert.md
+KB_DIR = "../knowledge_base"  # doit contenir entreprise.md
 
 REPONSE_REJET = MESSAGE_REFUS_FINAL  # le test vérifie le message final, après post-traitement
 
-# Mêmes questions que calibrate_v3.py, pour rester comparable aux distances déjà mesurées.
 pertinentes = [
     "Depuis quand existe Fluidexpert ?",
     "Quel est l'effectif de l'entreprise ?",

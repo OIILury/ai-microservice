@@ -13,21 +13,21 @@ async def corriger_texte(request: CorrectionRequest):
     Seul le résultat final reformulé est retourné au client.
     Les deux étapes sont mesurées et enregistrées séparément dans les métriques.
     """
-    # Étape 1 : correction (invisible pour le client final)
+    # Étape 1 : correction
     messages_correction = prompt_builder.build_correction_prompt(request.texte)
-    texte_corrige = await appeler_ollama_et_sauvegarder(
+    texte_corrigee = await appeler_ollama_et_sauvegarder(
         messages=messages_correction,
         temperature=settings.CORRECTION_TEMPERATURE,
         type_tache="correction",
         texte_entree=request.texte
     )
 
-    if not texte_corrige.strip():
+    if not texte_corrigee.strip():
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, 
             detail="Le modèle a retourné une réponse vide à l'étape de correction."
         )
-
+    """
     # Étape 2 : reformulation du texte déjà corrigé
     messages_reformulation = prompt_builder.build_reformulation_prompt(texte_corrige)
     texte_final = await appeler_ollama_et_sauvegarder(
@@ -42,8 +42,9 @@ async def corriger_texte(request: CorrectionRequest):
             status_code=status.HTTP_502_BAD_GATEWAY, 
             detail="Le modèle a retourné une réponse vide à l'étape de reformulation."
         )
-
+    """
     return CorrectionResponse(
-        texte_corrige=texte_final,
+        # texte_corrige=texte_final,
+        texte_corrige=texte_corrigee,
         modele_utilise=settings.OLLAMA_MODEL
     )
