@@ -55,6 +55,29 @@ class MetricsStore:
         except Exception as e:
             logger.error(f"Erreur lors de l'enregistrement de la métrique : {e}")
 
+    def purger_anciennes_metriques(self, jours_retention: int = 100) -> int:
+        """
+        Supprime les lignes plus anciennes que jours_retention.
+        Ne contient (en production) que des métriques de performance, jamais de texte
+        utilisateur : la purge protège l'espace disque sur le Jetson, ce n'est pas une
+        obligation RGPD dans ce contexte puisque le texte brut n'y est déjà pas stocké.
+        Retourne le nombre de lignes supprimées.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    "DELETE FROM ollama_metrics WHERE timestamp < datetime('now', ?)",
+                    (f"-{jours_retention} days",)
+                )
+                conn.commit()
+                nb_supprimees = cursor.rowcount
+                if nb_supprimees > 0:
+                    logger.info(f"Purge métriques : {nb_supprimees} ligne(s) de plus de {jours_retention} jours supprimée(s).")
+                return nb_supprimees
+        except Exception as e:
+            logger.error(f"Erreur lors de la purge des métriques : {e}")
+            return 0
+
     def get_all_metrics(self, limit: int = 200) -> List[Dict]:
         """Retourne les limit dernières métriques."""
         try:

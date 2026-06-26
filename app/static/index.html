@@ -418,13 +418,15 @@
         async function corrigerTexte() {
             const texte = correctionInput.value.trim();
             if (!texte) {
-                correctionResult.innerHTML = '<span class="error-text">Erreur : Veuillez entrer un texte.</span>';
+                correctionResult.textContent = 'Erreur : Veuillez entrer un texte.';
+                correctionResult.classList.add('error-text');
                 return;
             }
 
             btnCorrection.disabled = true;
             btnCorrection.textContent = 'Correction et reformulation en cours...';
             correctionResult.textContent = 'Traitement du pipeline...';
+            correctionResult.classList.remove('error-text');
             correctionMeta.textContent = '';
 
             try {
@@ -441,11 +443,13 @@
 
                 const data = await response.json();
                 correctionResult.textContent = data.texte_corrige;
+                correctionResult.classList.remove('error-text');
                 correctionMeta.textContent = `Modèle utilisé : ${data.modele_utilise}`;
                 // Refresh dashboard after successful call
                 setTimeout(chargerDashboard, 1000);
             } catch (error) {
-                correctionResult.innerHTML = `<span class="error-text">Erreur : ${error.message}</span>`;
+                correctionResult.textContent = `Erreur : ${error.message}`;
+                correctionResult.classList.add('error-text');
             } finally {
                 btnCorrection.disabled = false;
                 btnCorrection.textContent = 'Corriger et reformuler';
@@ -467,23 +471,40 @@
                     body: JSON.stringify({ requete })
                 });
                 const data = await response.json();
-                let contentHTML = `<p>${data.reponse}</p>`;
-                if (data.page_trouvee && data.page) {
-                    contentHTML += `<a href="${data.page}" target="_blank" style="display: inline-block; background: white; color: var(--primary); padding: 5px 10px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-top: 10px; border: 1px solid var(--primary);">→ Voir la page ${data.page}</a>`;
-                }
-                ajouterBulle(contentHTML, 'ia');
+                const lien = (data.page_trouvee && data.page) ? data.page : null;
+                ajouterBulle(data.reponse, 'ia', lien);
             } catch (error) {
-                ajouterBulle(`<span class="error-text">Erreur : ${error.message}</span>`, 'ia');
+                ajouterBulle(`Erreur : ${error.message}`, 'ia', null, true);
             } finally {
                 btnNavigation.disabled = false;
                 btnNavigation.textContent = 'Envoyer';
             }
         }
 
-        function ajouterBulle(content, type) {
+        // Construit la bulle de chat via le DOM (textContent), jamais via innerHTML
+        // sur du contenu venant de l'utilisateur ou du LLM : ces deux sources ne sont
+        // pas fiables (saisie libre / sortie d'un modèle pouvant être influencée par
+        // une injection de prompt) et ne doivent jamais être interprétées comme HTML.
+        function ajouterBulle(texte, type, lienPage = null, estErreur = false) {
             const bubble = document.createElement('div');
             bubble.className = `chat-bubble bubble-${type}`;
-            bubble.innerHTML = content;
+
+            const p = document.createElement('p');
+            p.style.margin = '0';
+            if (estErreur) p.className = 'error-text';
+            p.textContent = texte;
+            bubble.appendChild(p);
+
+            if (lienPage) {
+                const a = document.createElement('a');
+                a.href = lienPage;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.style.cssText = 'display: inline-block; background: white; color: var(--primary); padding: 5px 10px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-top: 10px; border: 1px solid var(--primary);';
+                a.textContent = `→ Voir la page ${lienPage}`;
+                bubble.appendChild(a);
+            }
+
             chatHistory.appendChild(bubble);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
@@ -555,23 +576,43 @@
             const body = document.getElementById('metricsTableBody');
             body.innerHTML = '';
             if (donnees.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" style="text-align:center">Aucune donnée disponible encore.</td></tr>';
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 8;
+                td.style.textAlign = 'center';
+                td.textContent = 'Aucune donnée disponible encore.';
+                tr.appendChild(td);
+                body.appendChild(tr);
                 return;
             }
             donnees.forEach(m => {
                 const tr = document.createElement('tr');
                 if (m.statut === 'erreur') tr.className = 'row-error';
                 const time = m.timestamp.split('T')[1].split('.')[0];
-                tr.innerHTML = `
-                    <td>${time}</td>
-                    <td><strong>${m.type_tache}</strong></td>
-                    <td>${m.modele}</td>
-                    <td>${(m.tokens_par_seconde || 0).toFixed(1)}</td>
-                    <td>${Math.round(m.temps_reponse_ms || 0)}</td>
-                    <td>${Math.round(m.time_to_first_token_ms || 0)}</td>
-                    <td>${m.distance_levenshtein || '-'}</td>
-                    <td>${m.statut === 'succes' ? '✅' : '❌'}</td>
-                `;
+
+                const valeurs = [
+                    time,
+                    m.type_tache,
+                    m.modele,
+                    (m.tokens_par_seconde || 0).toFixed(1),
+                    String(Math.round(m.temps_reponse_ms || 0)),
+                    String(Math.round(m.time_to_first_token_ms || 0)),
+                    m.distance_levenshtein != null ? String(m.distance_levenshtein) : '-',
+                    m.statut === 'succes' ? '✅' : '❌'
+                ];
+
+                valeurs.forEach((valeur, i) => {
+                    const td = document.createElement('td');
+                    if (i === 1) {
+                        const strong = document.createElement('strong');
+                        strong.textContent = valeur;
+                        td.appendChild(strong);
+                    } else {
+                        td.textContent = valeur;
+                    }
+                    tr.appendChild(td);
+                });
+
                 body.appendChild(tr);
             });
         }

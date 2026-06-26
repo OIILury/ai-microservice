@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     LOG_LEVEL: str = "INFO"
 
+    # "development" : endpoint /api/metrics/* monté + texte brut stocké en base (debug local).
+    # "production"  : endpoint /api/metrics/* non monté + aucun texte utilisateur stocké.
+    ENVIRONMENT: str = "production"
+
+    @property
+    def IS_DEVELOPMENT(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "development"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

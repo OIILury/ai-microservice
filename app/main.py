@@ -29,6 +29,9 @@ async def lifespan(app: FastAPI):
     # Démarrage : initialisation de la base de données, du client Ollama et de l'index RAG
     await asyncio.to_thread(metrics_store.init_db)
     logger.info("Base de métriques SQLite initialisée.")
+
+    # Purge des métriques de plus de 100 jours, à chaque démarrage du service.
+    await asyncio.to_thread(metrics_store.purger_anciennes_metriques, 100)
     
     logger.info(f"Démarrage du microservice. Modèle configuré : {settings.OLLAMA_MODEL}")
     await ollama_client.start()
@@ -89,7 +92,17 @@ app.add_middleware(
 # Enregistrement des routers
 app.include_router(correction.router)
 app.include_router(navigation.router)
-app.include_router(metrics.router)
+
+# Le router de métriques expose des données potentiellement sensibles (texte utilisateur
+# en mode dev, et de toute façon une surface d'API supplémentaire) : il n'est monté qu'en
+# environnement de développement. En production, ces routes n'existent simplement pas
+# (même /docs ne les listera pas).
+if settings.IS_DEVELOPMENT:
+    app.include_router(metrics.router)
+    logger.warning(
+        "ENVIRONMENT=development : l'endpoint /api/metrics/* est monté et le texte "
+        "utilisateur sera stocké en base. Ne pas utiliser cette configuration en production."
+    )
 
 # Service des fichiers statiques
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

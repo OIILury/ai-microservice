@@ -41,14 +41,17 @@ async def appeler_ollama_et_sauvegarder(
         ratio_taille = text_metrics.calculer_ratio_taille(texte_entree, texte_genere)
         
         # Sauvegarde non-bloquante
+        # Le texte brut (entrée/sortie) n'est stocké qu'en développement : en production,
+        # seules les métriques calculées (longueurs, comptages, distances, perf) sont
+        # conservées, jamais le contenu saisi par l'utilisateur.
         metriques = {
             "timestamp": timestamp_iso,
             "modele": settings.OLLAMA_MODEL,
             "type_tache": type_tache,
-            "texte_entree": texte_entree[:500] + "..." if len(texte_entree) > 500 else texte_entree,
+            "texte_entree": (texte_entree[:500] + "..." if len(texte_entree) > 500 else texte_entree) if settings.IS_DEVELOPMENT else None,
             "nb_caracteres_entree": len(texte_entree),
             "nb_mots_entree": nb_mots_entree,
-            "texte_sortie": texte_genere[:500] + "..." if len(texte_genere) > 500 else texte_genere,
+            "texte_sortie": (texte_genere[:500] + "..." if len(texte_genere) > 500 else texte_genere) if settings.IS_DEVELOPMENT else None,
             "nb_caracteres_sortie": len(texte_genere),
             "nb_mots_sortie": nb_mots_sortie,
             "temps_reponse_ms": temps_reponse_ms,
@@ -66,12 +69,12 @@ async def appeler_ollama_et_sauvegarder(
         return texte_genere
 
     except HTTPException as e:
-        # Enregistrement de l'erreur
+        # Enregistrement de l'erreur (même règle : texte brut uniquement en dev)
         metriques_erreur = {
             "timestamp": timestamp_iso,
             "modele": settings.OLLAMA_MODEL,
             "type_tache": type_tache,
-            "texte_entree": texte_entree[:500] + "..." if len(texte_entree) > 500 else texte_entree,
+            "texte_entree": (texte_entree[:500] + "..." if len(texte_entree) > 500 else texte_entree) if settings.IS_DEVELOPMENT else None,
             "nb_caracteres_entree": len(texte_entree),
             "statut": "erreur",
             "notes": str(e.detail)
@@ -83,7 +86,7 @@ async def appeler_ollama_et_sauvegarder(
             "timestamp": timestamp_iso,
             "modele": settings.OLLAMA_MODEL,
             "type_tache": type_tache,
-            "texte_entree": texte_entree[:500] + "..." if len(texte_entree) > 500 else texte_entree,
+            "texte_entree": (texte_entree[:500] + "..." if len(texte_entree) > 500 else texte_entree) if settings.IS_DEVELOPMENT else None,
             "nb_caracteres_entree": len(texte_entree),
             "statut": "erreur",
             "notes": str(e)
