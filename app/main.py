@@ -4,9 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.config import settings
 from app.services.ollama_client import ollama_client
+from app.services.rate_limiter import limiter
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -50,8 +53,28 @@ app = FastAPI(
     title="AI Microservice",
     version="1.0.0",
     description="Microservice de production pour la correction de texte et le routage de navigation via Ollama local.",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # En production, /docs, /redoc et /openapi.json sont désactivés (openapi_url=None
+    # désactive les trois en cascade, /docs et /redoc dépendant du schéma OpenAPI).
+    # Réduit la surface d'information exposée à un attaquant sans bénéfice en prod.
+    docs_url="/docs" if settings.IS_DEVELOPMENT else None,
+    redoc_url="/redoc" if settings.IS_DEVELOPMENT else None,
+    openapi_url="/openapi.json" if settings.IS_DEVELOPMENT else None,
 )
+
+# Rate limiting (cf. app/services/rate_limiter.py) : protège les endpoints qui
+# appellent le LLM contre un usage abusif (bot, boucle de script), un device Jetson
+# ayant des ressources limitées. Limites précises définies par endpoint via le
+# décorateur @limiter.limit(...) dans les routers correction.py et navigation.py.
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+@app.exception_handler(RateLimitExceeded)
+async def gestion_depassement_rate_limit(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Trop de requêtes envoyées. Veuillez réessayer dans quelques instants."}
+    )
 
 class LocalNetworkMiddleware(BaseHTTPMiddleware):
     ALLOWED_NETWORKS = [

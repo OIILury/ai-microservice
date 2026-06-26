@@ -1,25 +1,27 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from app.models.correction import CorrectionRequest, CorrectionResponse
 from app.services import prompt_builder
 from app.services.ollama_metrics_service import appeler_ollama_et_sauvegarder
+from app.services.rate_limiter import limiter
 from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["Text Processing"])
 
 @router.post("/corriger", response_model=CorrectionResponse)
-async def corriger_texte(request: CorrectionRequest):
+@limiter.limit("10/minute")
+async def corriger_texte(request: Request, payload: CorrectionRequest):
     """
     Pipeline interne : corrige le texte, puis le reformule automatiquement.
     Seul le résultat final reformulé est retourné au client.
     Les deux étapes sont mesurées et enregistrées séparément dans les métriques.
     """
     # Étape 1 : correction
-    messages_correction = prompt_builder.build_correction_prompt(request.texte)
+    messages_correction = prompt_builder.build_correction_prompt(payload.texte)
     texte_corrigee = await appeler_ollama_et_sauvegarder(
         messages=messages_correction,
         temperature=settings.CORRECTION_TEMPERATURE,
         type_tache="correction",
-        texte_entree=request.texte
+        texte_entree=payload.texte
     )
 
     if not texte_corrigee.strip():
