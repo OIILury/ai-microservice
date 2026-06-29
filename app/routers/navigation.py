@@ -1,10 +1,11 @@
 # app/routers/navigation.py
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from app.models.navigation import NavigationRequest, NavigationResponse
 from app.services.rag_engine import build_rag_prompt, post_traiter_reponse, MESSAGE_REFUS_FINAL
 from app.services.embedding_store import embedding_store
 from app.services.ollama_client import ollama_client
+from app.services.rate_limiter import limiter
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -18,15 +19,16 @@ PAGES_VALIDES = {
 }
 
 @router.post("/trouver-page", response_model=NavigationResponse)
-async def trouver_page(request: NavigationRequest):
+@limiter.limit("10/minute")
+async def trouver_page(request: Request, payload: NavigationRequest):
     """
     Endpoint conversationnel avec RAG pour répondre aux questions et proposer une page.
     """
     # 1. Recherche des chunks pertinents
-    chunks = embedding_store.search(request.requete, top_k=3)
+    chunks = embedding_store.search(payload.requete, top_k=3)
 
     # 2. Construction du prompt RAG
-    messages = build_rag_prompt(request.requete, chunks)
+    messages = build_rag_prompt(payload.requete, chunks)
 
     # 2bis. Contexte vide : court-circuit déterministe, pas d'appel au LLM.
     # (cf. rag_engine.build_rag_prompt : un contexte vide laisse au LLM l'opportunité
